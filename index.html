@@ -374,9 +374,13 @@
                 <head><title>3D 拓扑预览</title><script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"><\/script>
                 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"><\/script>
                 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/OBJExporter.js"><\/script>
+                <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/GLTFExporter.js"><\/script>
                 <script src="https://cdn.jsdelivr.net/npm/delaunator@5.0.0/delaunator.min.js"><\/script></head>
                 <body style="margin:0; background:#000;">
-                    <button id="download_obj" style="position: absolute; top: 20px; right: 20px; padding: 10px 20px; z-index: 100; background: #007bff; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">下载 OBJ 模型</button>
+                    <div style="position: absolute; top: 20px; right: 20px; z-index: 100; display: flex; gap: 10px;">
+                        <button id="download_obj" style="padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">下载 OBJ 模型</button>
+                        <button id="download_glb" style="padding: 10px 20px; background: #28a745; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">下载 GLB 模型</button>
+                    </div>
                     <script>
                         const data = JSON.parse(sessionStorage.getItem('faceData'));
                         const texs = JSON.parse(sessionStorage.getItem('textures'));
@@ -418,6 +422,22 @@
                             link.click();
                             document.body.removeChild(link);
                             URL.revokeObjectURL(url);
+                        });
+
+                        document.getElementById('download_glb').addEventListener('click', () => {
+                            const exporter = new THREE.GLTFExporter();
+                            exporter.parse(scene, function (gltf) {
+                                const blob = new Blob([gltf], { type: 'application/octet-stream' });
+                                const url = URL.createObjectURL(blob);
+                                const link = document.createElement('a');
+                                link.style.display = 'none';
+                                link.href = url;
+                                link.download = 'face_model.glb';
+                                document.body.appendChild(link);
+                                link.click();
+                                document.body.removeChild(link);
+                                URL.revokeObjectURL(url);
+                            }, { binary: true });
                         });
                     <\/script>
                 </body></html>
