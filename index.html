@@ -110,7 +110,6 @@
         const flipBtn = document.getElementById('flip_btn');
 
         let scanPhase = 'idle', poseStartTime = 0, faceData = null, cameraAspect = 1.0;
-        let uploadedImg = null;
         let sourceMirrored = true;
         const LOCK_TIME = 1500; 
         let textures = { front:null };
@@ -246,10 +245,7 @@
             if (camera) camera.stop();
             camera = new Camera(videoElement, {
                 onFrame: async () => { 
-                    if (uploadedImg) {
-                        await faceMesh.send({image: uploadedImg});
-                        uploadedImg = null; 
-                    } else if (scanPhase !== 'uploading') {
+                    if (scanPhase !== 'uploading') {
                         await faceMesh.send({image: videoElement}); 
                     }
                 },
@@ -281,13 +277,14 @@
             const reader = new FileReader();
             reader.onload = (event) => {
                 const img = new Image();
-                img.onload = () => {
-                    uploadedImg = img;
+                img.onload = async () => {
                     scanPhase = 'uploading';
                     startBtn.style.display = 'none';
                     uploadBtn.style.display = 'none';
                     flipBtn.style.display = 'none';
                     instruction.innerText = "正在提取图片五官...";
+                    await faceMesh.reset();
+                    await faceMesh.send({image: img});
                 };
                 img.src = event.target.result;
             };
@@ -301,7 +298,7 @@
 
         resetBtn.onclick = () => {
             scanPhase = 'idle';
-            poseStartTime = 0; faceData = null; textures.front = null; uploadedImg = null;
+            poseStartTime = 0; faceData = null; textures.front = null;
             document.getElementById('t_front').className = 'task';
             instruction.innerText = "准备好后点击下方按钮";
             
