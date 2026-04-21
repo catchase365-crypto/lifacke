@@ -376,8 +376,10 @@
                 <html>
                 <head><title>3D 拓扑预览</title><script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"><\/script>
                 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"><\/script>
+                <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/OBJExporter.js"><\/script>
                 <script src="https://cdn.jsdelivr.net/npm/delaunator@5.0.0/delaunator.min.js"><\/script></head>
                 <body style="margin:0; background:#000;">
+                    <button id="download_obj" style="position: absolute; top: 20px; right: 20px; padding: 10px 20px; z-index: 100; background: #007bff; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">下载 OBJ 模型</button>
                     <script>
                         const data = JSON.parse(sessionStorage.getItem('faceData'));
                         const texs = JSON.parse(sessionStorage.getItem('textures'));
@@ -400,10 +402,26 @@
                         geo.setIndex(new THREE.BufferAttribute(new Uint32Array(Delaunator.from(pts2d).triangles), 1));
                         geo.computeVertexNormals();
                         const material = new THREE.MeshBasicMaterial({ map: new THREE.TextureLoader().load(texs.front), side: THREE.DoubleSide });
-                        scene.add(new THREE.Mesh(geo, material));
+                        const mesh = new THREE.Mesh(geo, material);
+                        scene.add(mesh);
                         camera.position.z = 2;
                         function anim() { requestAnimationFrame(anim); renderer.render(scene, camera); }
                         anim();
+
+                        document.getElementById('download_obj').addEventListener('click', () => {
+                            const exporter = new THREE.OBJExporter();
+                            const result = exporter.parse(scene);
+                            const blob = new Blob([result], { type: 'text/plain' });
+                            const url = URL.createObjectURL(blob);
+                            const link = document.createElement('a');
+                            link.style.display = 'none';
+                            link.href = url;
+                            link.download = 'face_model.obj';
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                            URL.revokeObjectURL(url);
+                        });
                     <\/script>
                 </body></html>
             `);
