@@ -13,10 +13,9 @@
             font-family: -apple-system, sans-serif; 
             margin: 0; 
             background: #000; 
-            overflow: hidden; /* 防止滑动 */
+            overflow: hidden;
         }
         
-        /* 核心修复：全屏容器包裹两层画布 */
         #container { 
             position: fixed; 
             top: 0; left: 0; 
@@ -26,7 +25,6 @@
         
         video { display: none; }
         
-        /* 两层画布必须共享完全一致的样式，使用 cover 铺满全屏不留黑边 */
         .fullscreen-canvas { 
             position: absolute; 
             top: 0; left: 0; 
@@ -35,11 +33,10 @@
         }
         
         #three_canvas { 
-            pointer-events: none; /* 让点击穿透到下层 */
+            pointer-events: none;
             z-index: 2;
         }
 
-        /* 悬浮在底部的操作面板 */
         .dashboard { 
             position: fixed; 
             bottom: 30px; 
@@ -48,7 +45,7 @@
             width: 90%; 
             max-width: 400px; 
             padding: 20px; 
-            background: rgba(255, 255, 255, 0.95); /* 半透明玻璃质感 */
+            background: rgba(255, 255, 255, 0.95);
             border-radius: 20px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.3);
             text-align: center;
@@ -59,9 +56,10 @@
         .task-grid { display: grid; grid-template-columns: 1fr; margin-bottom: 15px; }
         .task { font-size: 13px; opacity: 0.5; padding: 10px; border: 1px solid #ddd; border-radius: 10px; background: #f9f9f9; transition: 0.3s; }
         .task.active { opacity: 1; border-color: #007bff; background: #e7f3ff; font-weight: bold; }
-        .task.done { opacity: 1; background: #d4edda; border-color: #28a745; color: #155724; display: none; } /* 扫完后隐藏以腾出空间 */
+        .task.done { opacity: 1; background: #d4edda; border-color: #28a745; color: #155724; display: none; } 
 
-        button { width: 100%; padding: 15px; font-size: 16px; border-radius: 12px; border: none; font-weight: bold; cursor: pointer; margin-top: 10px; }
+        button { width: 100%; padding: 15px; font-size: 16px; border-radius: 12px; border: none; font-weight: bold; cursor: pointer; margin-top: 10px; transition: 0.2s; }
+        button:active { transform: scale(0.98); }
         #start_btn { background: #007bff; color: #fff; margin-top:0; }
         #view_btn { background: #28a745; color: #fff; display: none; }
         #swap_btn { background: #8e44ad; color: #fff; display: none; }
@@ -84,8 +82,12 @@
         
         <button id="start_btn" disabled>请稍候...</button>
         <button id="upload_btn" style="background: #e67e22; color: #fff; display: none;">上传图片换脸</button>
-        <input type="file" id="upload_input" accept="image/*" style="display: none;">
+        <input type="file" id="upload_input" accept="image/*" multiple style="display: none;">
         <button id="swap_btn">开启实时换脸 (AR)</button>
+        <div id="switch_container" style="display: none; justify-content: space-between; gap: 10px; margin-top: 10px;">
+            <button id="prev_btn" style="background: #e74c3c; color: #fff; margin-top: 0;">◀ 变脸</button>
+            <button id="next_btn" style="background: #2ecc71; color: #fff; margin-top: 0;">变脸 ▶</button>
+        </div>
         <button id="view_btn">查看 3D 拓扑模型</button>
         
         <div style="display: flex; gap: 10px;">
@@ -115,6 +117,7 @@
         let textures = { front:null };
 
         let scene3D, camera3D, renderer3D, faceMesh3D;
+        let imagesToProcess = [], faceDataArray = [], currentFaceIndex = 0, batchResolve = null;
 
         function speak(t) {
             window.speechSynthesis.cancel();
@@ -128,6 +131,20 @@
 
         faceMesh.onResults((res) => {
             let w, h;
+            
+            // 批量处理多图模式
+            if (scanPhase === 'batch_processing') {
+                if (res.multiFaceLandmarks && res.multiFaceLandmarks[0]) {
+                    const face = res.multiFaceLandmarks[0];
+                    const iw = res.image.width, ih = res.image.height;
+                    const tex = captureFrameFromImage(res, iw, ih);
+                    const fd = face.map(p => ({x:p.x, y:p.y, z:p.z}));
+                    faceDataArray.push({ faceData: fd, texture: tex });
+                }
+                if (typeof batchResolve === 'function') batchResolve();
+                return;
+            }
+
             if (scanPhase === 'uploading') {
                 w = res.image.width;
                 h = res.image.height;
@@ -138,7 +155,6 @@
                 if (!w) return;
                 cameraAspect = h / w;
                 
-                // 确保两层画布内部的分辨率比例完全锁定
                 if(canvasElement.width !== w) canvasElement.width = w;
                 if(canvasElement.height !== h) canvasElement.height = h;
 
@@ -200,10 +216,10 @@
                     }
                 }
 
-                if (scanPhase === 'ar_swap' && faceMesh3D) {
+                // AR 实时贴合更新位置 (兼容单图和多图模式)
+                if ((scanPhase === 'ar_swap' || scanPhase === 'ar_swap_multiple') && faceMesh3D) {
                     const positions = faceMesh3D.geometry.attributes.position.array;
                     face.forEach((p, i) => {
-                        // 精准追踪：将归一化坐标转换回画布真实像素系
                         positions[i * 3] = currentFacingMode === 'user' ? (1 - p.x) * w : p.x * w;
                         positions[i * 3 + 1] = p.y * h;
                         positions[i * 3 + 2] = -p.z * w; 
@@ -215,8 +231,8 @@
                 if (scanPhase === 'uploading') {
                     alert('未检测到人脸，请重新上传包含清晰人脸的图片！');
                     resetBtn.onclick();
-                } else if (scanPhase === 'ar_swap' && renderer3D) {
-                    renderer3D.clear(); // 丢失人脸时清空重影
+                } else if ((scanPhase === 'ar_swap' || scanPhase === 'ar_swap_multiple') && renderer3D) {
+                    // 移除 clear，丢失追踪时保留上一帧面具冻结，防止闪烁漏出真脸
                 }
             }
         });
@@ -245,7 +261,7 @@
             if (camera) camera.stop();
             camera = new Camera(videoElement, {
                 onFrame: async () => { 
-                    if (scanPhase !== 'uploading') {
+                    if (scanPhase !== 'uploading' && scanPhase !== 'batch_processing') {
                         await faceMesh.send({image: videoElement}); 
                     }
                 },
@@ -262,7 +278,7 @@
             scanPhase = 'front'; 
             startBtn.style.display = 'none';
             uploadBtn.style.display = 'none';
-            flipBtn.style.display = 'none'; // 扫描时不可切换镜头
+            flipBtn.style.display = 'none'; 
             document.getElementById('t_front').className = 'task active';
             speak("请保持不动");
         };
@@ -271,24 +287,78 @@
             uploadInput.click();
         };
         
-        uploadInput.onchange = (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                const img = new Image();
-                img.onload = async () => {
-                    scanPhase = 'uploading';
-                    startBtn.style.display = 'none';
-                    uploadBtn.style.display = 'none';
-                    flipBtn.style.display = 'none';
-                    instruction.innerText = "正在提取图片五官...";
+        // 核心修复：多图上传并依次喂给神经网络提取数据
+        async function processBatch() {
+            scanPhase = 'batch_processing';
+            startBtn.style.display = 'none';
+            uploadBtn.style.display = 'none';
+            viewBtn.style.display = 'none';
+            flipBtn.style.display = 'none';
+            
+            for (let i = 0; i < imagesToProcess.length; i++) {
+                instruction.innerText = `正在提取五官... (${i+1}/${imagesToProcess.length})`;
+                await new Promise(async (resolve) => {
+                    batchResolve = resolve;
                     await faceMesh.reset();
-                    await faceMesh.send({image: img});
+                    await faceMesh.send({image: imagesToProcess[i]});
+                });
+            }
+            
+            if (faceDataArray.length > 0) {
+                scanPhase = 'batch_ready';
+                instruction.innerText = `上传 ${imagesToProcess.length} 张照片，成功提取 ${faceDataArray.length} 张脸，点击开启变脸`;
+                swapBtn.style.display = 'block';
+                resetBtn.style.display = 'block';
+            } else {
+                alert('未从上传的图片中检测到人脸！');
+                resetBtn.onclick();
+            }
+        }
+
+        uploadInput.onchange = (e) => {
+            const files = Array.from(e.target.files);
+            if (!files.length) return;
+            
+            if (files.length > 1) {
+                imagesToProcess = [];
+                faceDataArray = [];
+                currentFaceIndex = 0;
+                let loadedCount = 0;
+                
+                instruction.innerText = "正在读取多张图片...";
+                files.forEach(file => {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        const img = new Image();
+                        img.onload = () => {
+                            imagesToProcess.push(img);
+                            loadedCount++;
+                            if (loadedCount === files.length) {
+                                processBatch(); // 全部读取完毕后触发批量解析
+                            }
+                        };
+                        img.src = event.target.result;
+                    };
+                    reader.readAsDataURL(file);
+                });
+            } else {
+                const file = files[0];
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const img = new Image();
+                    img.onload = async () => {
+                        scanPhase = 'uploading';
+                        startBtn.style.display = 'none';
+                        uploadBtn.style.display = 'none';
+                        flipBtn.style.display = 'none';
+                        instruction.innerText = "正在提取图片五官...";
+                        await faceMesh.reset();
+                        await faceMesh.send({image: img});
+                    };
+                    img.src = event.target.result;
                 };
-                img.src = event.target.result;
-            };
-            reader.readAsDataURL(file);
+                reader.readAsDataURL(file);
+            }
         };
 
         flipBtn.onclick = () => {
@@ -299,6 +369,8 @@
         resetBtn.onclick = () => {
             scanPhase = 'idle';
             poseStartTime = 0; faceData = null; textures.front = null;
+            imagesToProcess = []; faceDataArray = []; currentFaceIndex = 0;
+            document.getElementById('switch_container').style.display = 'none';
             document.getElementById('t_front').className = 'task';
             instruction.innerText = "准备好后点击下方按钮";
             
@@ -314,13 +386,8 @@
             if(renderer3D) renderer3D.clear();
         };
 
-        swapBtn.onclick = () => {
-            if (!faceData || !textures.front) return;
-            scanPhase = 'ar_swap';
-            instruction.innerText = "实时贴合模式 (活动头部查看效果)";
-            swapBtn.style.display = 'none';
-            viewBtn.style.display = 'none';
-
+        // 统一渲染 Three.js 人脸网格
+        function loadFaceMesh3D(dataObj) {
             const w = canvasElement.width;
             const h = canvasElement.height;
 
@@ -328,42 +395,99 @@
                 renderer3D = new THREE.WebGLRenderer({ canvas: threeCanvas, alpha: true, antialias: true });
                 scene3D = new THREE.Scene();
             }
+            renderer3D.setSize(w, h, false); 
             
-            // 同步内部渲染分辨率
-            renderer3D.setSize(w, h, false); // 核心修复：false 防止修改 CSS 尺寸，保持其 object-fit 生效
-            
-            // 使用正交相机完美重合 2D 画布的像素坐标系：Left=0, Right=w, Top=0, Bottom=h
-            camera3D = new THREE.OrthographicCamera(0, w, 0, h, -1000, 1000);
-            
+            if (!camera3D) {
+                camera3D = new THREE.OrthographicCamera(0, w, 0, h, -1000, 1000);
+            }
+
             const geo = new THREE.BufferGeometry();
             const uv = [], pts2d = [];
-            
-            faceData.forEach(p => {
-                uv.push(sourceMirrored ? 1 - p.x : p.x, 1 - p.y); // 根据来源决定是否镜像UV
+            const isMirrored = dataObj.mirrored || false;
+
+            dataObj.faceData.forEach(p => {
+                uv.push(isMirrored ? 1 - p.x : p.x, 1 - p.y); 
                 pts2d.push([p.x, p.y]);
             });
             
             geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
             geo.setIndex(new THREE.BufferAttribute(new Uint32Array(Delaunator.from(pts2d).triangles), 1));
             
-            const pos = new Float32Array(faceData.length * 3);
+            const pos = new Float32Array(dataObj.faceData.length * 3);
             geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
 
             const loader = new THREE.TextureLoader();
-            const material = new THREE.MeshBasicMaterial({
-                map: loader.load(textures.front),
-                transparent: true,
-                opacity: 0.98,
-                side: THREE.DoubleSide
+            loader.load(dataObj.texture, (loadedTexture) => {
+                if (faceMesh3D) {
+                    faceMesh3D.geometry.dispose();
+                    faceMesh3D.geometry = geo;
+                    if (faceMesh3D.material.map) faceMesh3D.material.map.dispose();
+                    faceMesh3D.material.map = loadedTexture;
+                    faceMesh3D.material.needsUpdate = true;
+                } else {
+                    const material = new THREE.MeshBasicMaterial({
+                        map: loadedTexture,
+                        transparent: true,
+                        opacity: 0.98,
+                        side: THREE.DoubleSide
+                    });
+                    faceMesh3D = new THREE.Mesh(geo, material);
+                    scene3D.add(faceMesh3D);
+                }
             });
+        }
 
-            if (faceMesh3D) scene3D.remove(faceMesh3D);
-            faceMesh3D = new THREE.Mesh(geo, material);
-            scene3D.add(faceMesh3D);
+        swapBtn.onclick = () => {
+            if (scanPhase === 'batch_ready') {
+                if (faceDataArray.length === 0) return;
+                scanPhase = 'ar_swap_multiple';
+                instruction.innerText = "川剧变脸模式 (点击按钮切换脸谱)";
+                swapBtn.style.display = 'none';
+                viewBtn.style.display = 'none';
+                document.getElementById('switch_container').style.display = 'flex';
+                
+                loadFaceMesh3D({
+                    faceData: faceDataArray[currentFaceIndex].faceData,
+                    texture: faceDataArray[currentFaceIndex].texture,
+                    mirrored: false
+                });
+            } else {
+                if (!faceData || !textures.front) return;
+                scanPhase = 'ar_swap';
+                instruction.innerText = "实时贴合模式 (活动头部查看效果)";
+                swapBtn.style.display = 'none';
+                viewBtn.style.display = 'none';
+                
+                loadFaceMesh3D({
+                    faceData: faceData,
+                    texture: textures.front,
+                    mirrored: sourceMirrored
+                });
+            }
+        };
+
+        // 绑定上一张/下一张事件
+        document.getElementById('prev_btn').onclick = () => {
+            if(faceDataArray.length === 0) return;
+            currentFaceIndex = (currentFaceIndex - 1 + faceDataArray.length) % faceDataArray.length;
+            loadFaceMesh3D({
+                faceData: faceDataArray[currentFaceIndex].faceData,
+                texture: faceDataArray[currentFaceIndex].texture,
+                mirrored: false
+            });
+        };
+
+        document.getElementById('next_btn').onclick = () => {
+            if(faceDataArray.length === 0) return;
+            currentFaceIndex = (currentFaceIndex + 1) % faceDataArray.length;
+            loadFaceMesh3D({
+                faceData: faceDataArray[currentFaceIndex].faceData,
+                texture: faceDataArray[currentFaceIndex].texture,
+                mirrored: false
+            });
         };
 
         viewBtn.onclick = () => {
-            // 省略原预览逻辑，保持不变...
             sessionStorage.setItem('faceData', JSON.stringify(faceData));
             sessionStorage.setItem('textures', JSON.stringify(textures));
             sessionStorage.setItem('aspect', cameraAspect);
