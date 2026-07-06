@@ -39,30 +39,31 @@
 
         .dashboard { 
             position: fixed; 
-            bottom: 40px; 
+            bottom: 20px; 
             left: 50%; 
             transform: translateX(-50%);
-            width: 90%; 
-            max-width: 420px; 
-            padding: 24px; 
-            background: rgba(10, 20, 10, 0.7);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border: 1px solid rgba(0, 255, 64, 0.2);
-            border-radius: 28px;
-            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(0, 255, 64, 0.1);
+            width: 85%; 
+            max-width: 360px; 
+            padding: 16px; 
+            background: rgba(0, 15, 5, 0.45);
+            backdrop-filter: blur(25px) saturate(180%);
+            -webkit-backdrop-filter: blur(25px) saturate(180%);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 24px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.4), inset 0 0 0 1px rgba(255, 255, 255, 0.05);
             text-align: center;
             z-index: 10;
         }
 
-        #instruction { font-size: 18px; font-weight: 600; color: #00ff40; margin-bottom: 18px; letter-spacing: 0.5px; text-shadow: 0 0 12px rgba(0,255,64,0.4); }
-        .task-grid { display: grid; grid-template-columns: 1fr; margin-bottom: 18px; }
-        .task { font-size: 14px; opacity: 0.6; padding: 14px; border: 1px solid rgba(0,255,64,0.1); border-radius: 16px; background: rgba(0,255,64,0.03); color: #88ffaa; transition: 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
+        #instruction { font-size: 14px; font-weight: 600; color: #00ff40; margin-bottom: 12px; letter-spacing: 0.3px; text-shadow: 0 0 8px rgba(0,255,64,0.3); }
+        .task-grid { display: grid; grid-template-columns: 1fr; margin-bottom: 12px; }
+        .task { font-size: 12px; opacity: 0.7; padding: 10px; border: 1px solid rgba(0,255,64,0.15); border-radius: 12px; background: rgba(0,255,64,0.05); color: #88ffaa; transition: 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
         .task.active { opacity: 1; border-color: rgba(0,255,64,0.4); background: rgba(0,255,64,0.1); font-weight: 600; box-shadow: 0 0 20px rgba(0,255,64,0.15); color: #00ff40; }
         .task.done { opacity: 1; background: rgba(0,255,64,0.15); border-color: #00ff40; color: #00ff40; display: none; } 
 
-        button { width: 100%; padding: 16px; font-size: 15px; border-radius: 18px; border: 1px solid rgba(0,255,64,0.4); font-weight: 600; cursor: pointer; margin-top: 12px; transition: 0.3s cubic-bezier(0.16, 1, 0.3, 1); color: #000; background: linear-gradient(135deg, #00ff40 0%, #00b32d 100%); box-shadow: 0 4px 15px rgba(0, 255, 64, 0.2); letter-spacing: 0.5px; }
-        button:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(0, 255, 64, 0.4); border-color: rgba(0,255,64,0.6); }
+        button { width: 100%; padding: 11px; font-size: 13px; border-radius: 14px; border: 1px solid rgba(0,255,64,0.3); font-weight: 600; cursor: pointer; margin-top: 8px; transition: 0.3s cubic-bezier(0.16, 1, 0.3, 1); color: #fff; background: rgba(0, 255, 64, 0.15); backdrop-filter: blur(5px); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2); letter-spacing: 0.5px; }
+        #start_btn, #swap_btn { background: linear-gradient(135deg, rgba(0, 255, 64, 0.8) 0%, rgba(0, 179, 45, 0.8) 100%); color: #000; border: none; }
+        button:hover { background: rgba(0, 255, 64, 0.25); transform: translateY(-1px); }
         button:active { transform: scale(0.97); }
         #start_btn { margin-top:0; }
         #view_btn { display: none; }
